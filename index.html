@@ -1,0 +1,192 @@
+><!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تطبيق دردشة متقدم</title>
+<style>
+body { font-family:'Segoe UI',sans-serif; background:#e5ddd5; margin:0; display:flex; justify-content:center; align-items:center; height:100vh; }
+.chat-app { width:90%; max-width:700px; height:90vh; background:#fff; border-radius:10px; display:flex; flex-direction:column; overflow:hidden; }
+.chat-header { padding:15px; background:#075e54; color:white; font-weight:bold; display:flex; justify-content:space-between; align-items:center; }
+.chat-area { flex:1; padding:10px; overflow-y:auto; background:#e5ddd5; }
+.message { max-width:70%; padding:10px; margin-bottom:10px; border-radius:10px; word-wrap:break-word; }
+.sent { background:#dcf8c6; margin-left:auto; border-top-right-radius:0;}
+.received { background:#fff; margin-right:auto; border-top-left-radius:0;}
+.message-time { font-size:0.7em; color:#666; margin-top:3px; }
+.message-input { display:flex; gap:5px; padding:10px; background:#f0f0f0; }
+.message-input input { flex:1; padding:10px; border-radius:20px; border:none; outline:none; }
+button { width:45px; height:45px; border-radius:50%; border:none; cursor:pointer; font-size:1.2em; display:flex; justify-content:center; align-items:center; color:white; }
+.send-button { background:#075e54; }
+.send-button:hover { background:#128c7e; }
+.record-button { background:#128c7e; }
+.record-button:hover { background:#0fa07a; }
+.file-button { background:#ff9800; }
+.file-button:hover { background:#ffa726; }
+.emoji-button { background:#ff4081; }
+.emoji-button:hover { background:#f50057; }
+.emoji-picker { display:none; position:absolute; background:white; border:1px solid #ccc; padding:5px; border-radius:5px; max-width:250px; max-height:150px; overflow:auto; }
+.login-modal { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; justify-content:center; align-items:center; z-index:1000; }
+.login-form { background:white; padding:20px; border-radius:10px; width:90%; max-width:400px; text-align:center; }
+.login-form input { width:100%; padding:10px; margin-bottom:10px; }
+.login-button { background:#075e54; color:white; padding:10px; width:100%; border:none; border-radius:5px; cursor:pointer; }
+.login-button:hover { background:#128c7e; }
+</style>
+</head>
+<body>
+<div class="chat-app">
+    <div class="chat-header">مجموعة الدردشة المتقدمة
+        <div>
+            <button id="emoji-button" class="emoji-button">😊</button>
+            <button id="image-button" class="file-button">🖼️</button>
+            <button id="record-button" class="record-button">🎙️</button>
+            <button id="video-button" class="record-button">📹</button>
+        </div>
+    </div>
+    <div class="chat-area" id="chat-area"></div>
+    <div class="message-input">
+        <input type="text" id="message-input" placeholder="اكتب رسالة...">
+        <button class="send-button" id="send-button">↑</button>
+    </div>
+</div>
+
+<div class="emoji-picker" id="emoji-picker"></div>
+<input type="file" id="image-input" accept="image/*" style="display:none">
+
+<div class="login-modal" id="login-modal">
+    <div class="login-form">
+        <h2>ادخل اسمك للدردشة</h2>
+        <input type="text" id="username-input" placeholder="اسمك">
+        <button class="login-button" id="login-button">الدخول</button>
+    </div>
+</div>
+
+<script>
+const app={currentUser:null,messages:[]};
+
+const chatArea=document.getElementById('chat-area');
+const messageInput=document.getElementById('message-input');
+const sendButton=document.getElementById('send-button');
+const loginModal=document.getElementById('login-modal');
+const usernameInput=document.getElementById('username-input');
+const loginButton=document.getElementById('login-button');
+
+const recordButton=document.getElementById('record-button');
+const videoButton=document.getElementById('video-button');
+const imageButton=document.getElementById('image-button');
+const imageInput=document.getElementById('image-input');
+const emojiButton=document.getElementById('emoji-button');
+const emojiPicker=document.getElementById('emoji-picker');
+
+// ---------- تسجيل الدخول ----------
+loginButton.addEventListener('click', ()=>{
+    const username=usernameInput.value.trim();
+    if(username){
+        app.currentUser=username;
+        loginModal.style.display='none';
+        messageInput.disabled=false;
+        sendButton.disabled=false;
+        recordButton.disabled=false;
+        videoButton.disabled=false;
+        imageButton.disabled=false;
+        messageInput.focus();
+    } else alert("الرجاء إدخال اسم المستخدم");
+});
+usernameInput.addEventListener('keypress',(e)=>{ if(e.key==='Enter') loginButton.click(); });
+messageInput.disabled=true; sendButton.disabled=true; recordButton.disabled=true; videoButton.disabled=true; imageButton.disabled=true;
+
+// ---------- إرسال نص ----------
+sendButton.addEventListener('click', sendTextMessage);
+messageInput.addEventListener('keypress',(e)=>{ if(e.key==='Enter') sendTextMessage(); });
+function sendTextMessage(){
+    const text=messageInput.value.trim();
+    if(text && app.currentUser){
+        const msg={id:Date.now(), sender:app.currentUser, text:text, type:'sent', time:getCurrentTime()};
+        app.messages.push(msg); renderMessages(); messageInput.value='';
+    }
+}
+
+// ---------- إرسال الصور ----------
+imageButton.addEventListener('click', ()=>imageInput.click());
+imageInput.addEventListener('change', ()=>{
+    const file=imageInput.files[0];
+    if(file){
+        const reader=new FileReader();
+        reader.onload=()=>{
+            const msg={id:Date.now(), sender:app.currentUser, text:`<img src="${reader.result}" style="max-width:200px;border-radius:10px;">`, type:'sent', time:getCurrentTime()};
+            app.messages.push(msg); renderMessages();
+        }
+        reader.readAsDataURL(file);
+    }
+});
+
+// ---------- Emojis ----------
+const emojis=["😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 😉 😌 😍 😘 😗 😙 😚 😋 😜 🤪 😎 🥳 😏 😒 😞 😔 😢 😭 😡 🤬 🤯"];
+emojiButton.addEventListener('click', ()=>{
+    emojiPicker.style.display=emojiPicker.style.display==='block'?'none':'block';
+    emojiPicker.innerHTML=emojis.join(' ');
+});
+emojiPicker.addEventListener('click',(e)=>{
+    if(e.target.textContent){ messageInput.value+=e.target.textContent; emojiPicker.style.display='none'; messageInput.focus();}
+});
+
+// ---------- تسجيل الصوت ----------
+let mediaRecorder, audioChunks=[];
+recordButton.addEventListener('click', async ()=>{
+    if(recordButton.dataset.recording==='true'){
+        mediaRecorder.stop(); recordButton.dataset.recording='false'; recordButton.textContent='🎙️';
+    } else {
+        try{
+            const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+            mediaRecorder=new MediaRecorder(stream);
+            audioChunks=[];
+            mediaRecorder.ondataavailable=e=>audioChunks.push(e.data);
+            mediaRecorder.onstop=()=>{
+                const audioBlob=new Blob(audioChunks,{type:'audio/ogg; codecs=opus'});
+                const audioUrl=URL.createObjectURL(audioBlob);
+                const msg={id:Date.now(), sender:app.currentUser, text:`<audio controls src="${audioUrl}"></audio>`, type:'sent', time:getCurrentTime()};
+                app.messages.push(msg); renderMessages();
+            };
+            mediaRecorder.start(); recordButton.dataset.recording='true'; recordButton.textContent='⏹️';
+        } catch(err){ alert("تعذر الوصول إلى الميكروفون: "+err); }
+    }
+});
+
+// ---------- تسجيل الفيديو ----------
+videoButton.addEventListener('click', async ()=>{
+    if(videoButton.dataset.recording==='true'){
+        mediaRecorder.stop(); videoButton.dataset.recording='false'; videoButton.textContent='📹';
+    } else {
+        try{
+            const stream=await navigator.mediaDevices.getUserMedia({audio:true, video:true});
+            mediaRecorder=new MediaRecorder(stream);
+            let chunks=[];
+            mediaRecorder.ondataavailable=e=>chunks.push(e.data);
+            mediaRecorder.onstop=()=>{
+                const videoBlob=new Blob(chunks,{type:'video/webm'});
+                const videoUrl=URL.createObjectURL(videoBlob);
+                const msg={id:Date.now(), sender:app.currentUser, text:`<video controls src="${videoUrl}" style="max-width:200px;border-radius:10px;"></video>`, type:'sent', time:getCurrentTime()};
+                app.messages.push(msg); renderMessages();
+            };
+            mediaRecorder.start(); videoButton.dataset.recording='true'; videoButton.textContent='⏹️';
+        } catch(err){ alert("تعذر الوصول إلى الكاميرا: "+err); }
+    }
+});
+
+// ---------- وظائف مساعدة ----------
+function renderMessages(){
+    chatArea.innerHTML='';
+    app.messages.forEach(msg=>{
+        const div=document.createElement('div');
+        div.className=`message ${msg.type}`;
+        div.innerHTML=`${msg.type==='received'?'<b>'+msg.sender+'</b><br>':''}${msg.text}<div class="message-time">${msg.time}</div>`;
+        chatArea.appendChild(div);
+    });
+    chatArea.scrollTop=chatArea.scrollHeight;
+}
+function getCurrentTime(){
+    const now=new Date();
+    return `${now.getHours()}:${now.getMinutes().toString().padStart(2,'0')}`;
+}
+</script>
+</body>
+</html>
